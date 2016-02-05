@@ -11,15 +11,14 @@ module Export
       end
     end
 
-    def self.export_all(path)
+    def self.export_all(_path)
       # TODO
     end
 
-    private
-      def self.export_one_to_file(id, file_name)
-        gf = ::GenericFile.find(id)
-        json = Export::GenericFile.new(gf).to_json
-        File.write(file_name, json)
-      end
+    def self.export_one_to_file(id, file_name)
+      gf = ::GenericFile.find(id)
+      json = Export::GenericFile.new(gf).to_json
+      File.write(file_name, json)
+    end
   end
 end

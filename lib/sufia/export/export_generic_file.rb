@@ -4,11 +4,10 @@ module Export
   class GenericFile
     # Properties to be exported
     attr_accessor :id, :label, :depositor, :arkivo_checksum, :relative_path,
-      :import_url, :part_of, :resource_type, :title, :creator, :contributor,
-      :description, :tag, :rights, :publisher, :date_created, :date_uploaded,
-      :date_modified, :subject, :language, :identifier, :based_near,
-      :related_url, :bibliographic_citation, :source
-      :_source_uri
+                  :import_url, :part_of, :resource_type, :title, :creator, :contributor,
+                  :description, :tag, :rights, :publisher, :date_created, :date_uploaded,
+                  :date_modified, :subject, :language, :identifier, :based_near,
+                  :related_url, :bibliographic_citation, :source
     attr_accessor :characterization
 
     # The content is fetched from Sufia 7 at the time the GenericFile is imported
