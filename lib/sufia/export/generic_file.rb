@@ -1,26 +1,25 @@
-require "../lib/sufia/export/export_characterization.rb"
+require "../lib/sufia/export/permissions.rb"
+require "../lib/sufia/export/versions_from_graph.rb"
 
 module Export
   class GenericFile
     # Properties to be exported
     attr_accessor :id, :label, :depositor, :arkivo_checksum, :relative_path,
-                  :import_url, :part_of, :resource_type, :title, :creator, :contributor,
+                  :import_url, :resource_type, :title, :creator, :contributor,
                   :description, :tag, :rights, :publisher, :date_created, :date_uploaded,
                   :date_modified, :subject, :language, :identifier, :based_near,
-                  :related_url, :bibliographic_citation, :source
-    attr_accessor :characterization
+                  :related_url, :batch_id, :visibility, :versions
+    attr_accessor :bibliographic_citation, :source
+    attr_accessor :permissions
+
+    # Don't export this. Let the file be re-characterized in Sufia 7.
+    #
+    # attr_accessor :characterization
+    # contains 'full_text'
+    # contains "thumbnail"
 
     # The content is fetched from Sufia 7 at the time the GenericFile is imported
     # contains "content", class_name: 'FileContentDatastream'
-
-    # We probably don't need to worry about this
-    # if we let Sufia 7 re-characterize the file and re-generate derivatives
-    #
-    # contains 'full_text'
-    # contains "thumbnail"
-    #
-
-    # TODO: belongs_to :batch
 
     def initialize(gf)
       @id = gf.id
@@ -29,7 +28,6 @@ module Export
       @arkivo_checksum = gf.arkivo_checksum
       @relative_path = gf.relative_path
       @import_url = gf.import_url
-      @part_of = gf.part_of
       @resource_type = gf.resource_type
       @title = gf.title
       @creator = gf.creator
@@ -48,7 +46,20 @@ module Export
       @related_url = gf.related_url
       @bibliographic_citation = gf.bibliographic_citation
       @source = gf.source
-      @characterization = Export::Characterization.new(gf)
+      @batch_id = gf.batch.id if gf.batch
+      @visibility = gf.visibility
+      # @characterization = Export::Characterization.new(gf)
+      @versions = []
+      if gf.content.has_versions?
+        @versions = Export::VersionsFromGraph.parse(gf.content.versions)
+      end
+      @permissions = Export::Permissions.new(gf.permissions).to_a
+    end
+
+    def to_json(pretty = false)
+      return super unless pretty
+      json = self.to_json
+      JSON.pretty_generate(JSON.parse(json))
     end
   end
 end

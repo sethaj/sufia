@@ -1,7 +1,7 @@
-require "../lib/sufia/export/export_generic_file.rb"
+require "../lib/sufia/export/generic_file.rb"
 
 module Export
-  class ExportService
+  class Service
     # Exports each GenericFile ID to a JSON file in the specified path
     # Each JSON file is named gw_###.json (where ### is the Generic File's ID)
     def self.export(ids, path)
@@ -17,7 +17,7 @@ module Export
 
     def self.export_one_to_file(id, file_name)
       gf = ::GenericFile.find(id)
-      json = Export::GenericFile.new(gf).to_json
+      json = Export::GenericFile.new(gf).to_json(true)
       File.write(file_name, json)
     end
   end
