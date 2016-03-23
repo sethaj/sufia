@@ -58,8 +58,7 @@ module Export
 
     def to_json(pretty = false)
       return super unless pretty
-      json = self.to_json
-      JSON.pretty_generate(JSON.parse(json))
+      JSON.pretty_generate(JSON.parse(to_json))
     end
   end
 end

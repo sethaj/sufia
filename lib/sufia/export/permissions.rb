@@ -18,7 +18,7 @@ module Export
     end
 
     def to_a
-      @permissions.map {|p| Permission.new(p) }
+      @permissions.map { |p| Permission.new(p) }
     end
   end
 end
