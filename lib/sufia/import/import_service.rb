@@ -25,17 +25,24 @@ module Importer
     private
 
       def work_from_gf(gf)
+
         # File Set
         # TODO: missing properties
         fs = FileSet.new
-        fs.mime_type = gf.characterization.mime_type
-        fs.format_label = gf.characterization.format_label
+        # fs.mime_type = gf.characterization.mime_type
+        # fs.format_label = gf.characterization.format_label
+        fs.title << gf.title
+        fs.date_uploaded = gf.date_uploaded
+        fs.date_modified = gf.date_modified
         fs.apply_depositor_metadata(gf.depositor)
         fs.save!
 
-        # File
-        file = sufia6_content(gf.id)
-        Hydra::Works::UploadFileToFileSet.call(fs, file)
+        fs.permissions = permissions_from_gf(fs.id, gf.permissions)
+        fs.save!
+
+        # # File
+        # file = sufia6_content(gf.id)
+        # Hydra::Works::UploadFileToFileSet.call(fs, file)
 
         # Generic Work
         gw = GenericWork.new
@@ -55,8 +62,8 @@ module Importer
         gw.rights                 = gf.rights
         gw.publisher              = gf.publisher
         gw.date_created           = gf.date_created
-        gw.date_uploaded          = gf.date_uploaded
-        gw.date_modified          = gf.date_modified
+        # gw.date_uploaded          = gf.date_uploaded ???
+        # gw.date_modified          = gf.date_modified ???
         gw.subject                = gf.subject
         gw.language               = gf.language
         gw.identifier             = gf.identifier
@@ -64,9 +71,33 @@ module Importer
         gw.related_url            = gf.related_url
         gw.bibliographic_citation = gf.bibliographic_citation
         gw.source                 = gf.source
+
         gw.ordered_members << fs
+
         gw.save!
+        puts "Generic Work #{gw.id}"
+
+        gw.permissions = permissions_from_gf(gw.id, gf.permissions)
+        gw.save!
+
         gw
+      end
+
+      def permissions_from_gf(id, gf_perms)
+        permissions = []
+        gf_perms.each do |gf_perm|
+          permissions << permission(id, gf_perm)
+        end
+        permissions
+      end
+
+      def permission(gw_id, gf_perm)
+        agent = gf_perm.agent.split("/").last
+        type = agent.split("#").first
+        name = agent.split("#").last
+        access = gf_perm.mode.split("#").last.downcase
+        access = "edit" if access == "write"
+        Hydra::AccessControls::Permission.new(id: gw_id, name: name, type: type, access: access)
       end
 
       def sufia6_content(id)
