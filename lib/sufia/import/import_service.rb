@@ -68,7 +68,6 @@ module Importer
         gw.related_url            = gf.related_url
         gw.bibliographic_citation = gf.bibliographic_citation
         gw.source                 = gf.source
-
         gw.ordered_members << fs
         gw.save!
         puts "Generic Work #{gw.id}"
@@ -76,9 +75,7 @@ module Importer
         gw.permissions = permissions_from_gf(gw.id, gf.permissions)
         gw.save!
 
-        byebug
         # TODO: set generic work thumbnail (shouldn't this happen automatically in create derivatives)
-
         gw
       end
 
@@ -126,11 +123,13 @@ module Importer
         end
 
         # ...and characterize it.
-        byebug
-        CharacterizeJob.perform_later(fs.id, filename_on_disk)
-        CreateDerivativesJob.perform_later(fs.id, filename_on_disk)
+        # TODO: perform_now or perform_later?
+        #       What's the risk of leaving too many files on disk?
+        #       Delete filename_on_disk at the end.
+        CharacterizeJob.perform_now(fs.id, filename_on_disk)
+        CreateDerivativesJob.perform_now(fs.id, filename_on_disk)
 
-        # byebug
+        # Should we do this instead?
         # ingest = IngestFileJob.new
         # user_key = "hjc14@psu.edu"
         # mime_type = nil
