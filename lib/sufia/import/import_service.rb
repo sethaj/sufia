@@ -180,6 +180,7 @@ module Importer
       files.each do |file_name|
         import_file(file_name)
       end
+      GenericWork.reindex_everything
     end
 
     def import_file(file_name)
