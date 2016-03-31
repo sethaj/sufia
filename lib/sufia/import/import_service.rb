@@ -49,7 +49,7 @@ module Importer
       fs.save!
 
       # File
-      import_old_versions(gf, fs, depositor)
+      import_old_versions(gf, fs)
       import_current_version(gf, fs)
 
       fs
@@ -89,16 +89,15 @@ module Importer
       CreateDerivativesJob.perform_now(fs.id, filename_on_disk)
     end
 
-    def import_old_versions(gf, fs, depositor)
+    def import_old_versions(gf, fs)
       return if gf.versions.count <= 1
       # Upload all versions before the current version
       # (notice that we don't characterize these versions)
-      gf.versions.sort_by(&:created).pop.each do |version|
+      versions = gf.versions.sort_by(&:created)
+      versions.pop
+      versions.each do |version|
         source_uri = sufia6_version_open_uri(gf.id, version.label)
         Hydra::Works::UploadFileToFileSet.call(fs, source_uri)
-        user = User.find_by_email(depositor) # TODO: create user ahead of time???
-        relation = "original_file"
-        CurationConcerns::VersioningService.create(fs.send(relation.to_sym), user)
       end
     end
   end
@@ -180,7 +179,7 @@ module Importer
       files.each do |file_name|
         import_file(file_name)
       end
-      GenericWork.reindex_everything
+      # GenericWork.reindex_everything
     end
 
     def import_file(file_name)
