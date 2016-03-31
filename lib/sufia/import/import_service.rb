@@ -10,87 +10,16 @@ module Importer
     end
   end
 
-  class ImportGenericFile
-    attr_reader :settings
-
-    def initialize(settings)
-      @settings = settings
-    end
-
-    def depositor(gf)
-      # This is needed because Sufia uses the full e-mail address (xyz@psu.edu) but ScholarSphere
-      # uses only the login name (xyz). Here we make sure we match the Sufia convention. This
-      # won't be needed when we run the import in ScholarSphere directly since the users we'll be
-      # already in the db with the expected format (xyz@psu.edu)
-      gf.depositor + "@psu.edu"
-    end
-
-    def import(gf)
-      # File Set
-      fs = FileSet.new
-      fs.title << gf.title
-      fs.filename = gf.filename
-      fs.label = gf.label
-      fs.date_uploaded = gf.date_uploaded
-      fs.date_modified = gf.date_modified
-      fs.apply_depositor_metadata(depositor(gf))
-      fs.save!
-
-      fs.permissions = permissions_from_gf(fs.id, gf.permissions)
-      fs.save!
-
-      # File
-      import_old_versions(gf, fs)
-      import_current_version(gf, fs)
-
-      # Generic Work
-      gw = generic_work_from_generic_file(gf)
-      gw.ordered_members << fs
-      gw.permissions = permissions_from_gf(gw.id, gf.permissions)
-      gw.save!
-      Rails.logger.debug "[IMPORT] Created generic work #{gw.id}"
-
-      # TODO: set generic work thumbnail (shouldn't this happen automatically in create derivatives)
-      gw
-    end
-
-    def generic_work_from_generic_file(gf)
-      GenericWork.new.tap do |gw|
-        gw.id = gf.id if @settings.preserve_ids
-        gw.apply_depositor_metadata(depositor(gf))
-        gw.label                  = gf.label
-        gw.arkivo_checksum        = gf.arkivo_checksum
-        gw.relative_path          = gf.relative_path
-        gw.import_url             = gf.import_url
-        gw.part_of                = gf.part_of
-        gw.resource_type          = gf.resource_type
-        gw.title                  = gf.title
-        gw.creator                = gf.creator
-        gw.contributor            = gf.contributor
-        gw.description            = gf.description
-        gw.tag                    = gf.tag
-        gw.rights                 = gf.rights
-        gw.publisher              = gf.publisher
-        gw.date_created           = gf.date_created
-        gw.subject                = gf.subject
-        gw.language               = gf.language
-        gw.identifier             = gf.identifier
-        gw.based_near             = gf.based_near
-        gw.related_url            = gf.related_url
-        gw.bibliographic_citation = gf.bibliographic_citation
-        gw.source                 = gf.source
-      end
-    end
-
-    def permissions_from_gf(id, gf_perms)
+  class ImportPermission
+    def self.from_gf(id, gf_perms)
       permissions = []
       gf_perms.each do |gf_perm|
-        permissions << permission(id, gf_perm)
+        permissions << create(id, gf_perm)
       end
       permissions
     end
 
-    def permission(gw_id, gf_perm)
+    def self.create(gw_id, gf_perm)
       agent = gf_perm.agent.split("/").last           # e.g. "http://projecthydra.org/ns/auth/person#hjc14"
       type = agent.split("#").first                   # e.g. person or group
       name = agent.split("#").last                    # e.g. hjc14 or public
@@ -98,6 +27,32 @@ module Importer
       access = gf_perm.mode.split("#").last.downcase  # e.g. "http://www.w3.org/ns/auth/acl#Write"
       access = "edit" if access == "write"
       Hydra::AccessControls::Permission.new(id: gw_id, name: name, type: type, access: access)
+    end
+  end
+
+  class ImportFileSet
+    def initialize(settings)
+      @settings = settings
+    end
+
+    def from_gf(gf, depositor)
+      fs = FileSet.new
+      fs.title << gf.title
+      fs.filename = gf.filename
+      fs.label = gf.label
+      fs.date_uploaded = gf.date_uploaded
+      fs.date_modified = gf.date_modified
+      fs.apply_depositor_metadata(depositor)
+      fs.save!
+
+      fs.permissions = ImportPermission.from_gf(fs.id, gf.permissions)
+      fs.save!
+
+      # File
+      import_old_versions(gf, fs, depositor)
+      import_current_version(gf, fs)
+
+      fs
     end
 
     def sufia6_content_open_uri(id)
@@ -134,17 +89,82 @@ module Importer
       CreateDerivativesJob.perform_now(fs.id, filename_on_disk)
     end
 
-    def import_old_versions(gf, fs)
+    def import_old_versions(gf, fs, depositor)
       return if gf.versions.count <= 1
       # Upload all versions before the current version
       # (notice that we don't characterize these versions)
       gf.versions.sort_by(&:created).pop.each do |version|
         source_uri = sufia6_version_open_uri(gf.id, version.label)
         Hydra::Works::UploadFileToFileSet.call(fs, source_uri)
-        user = User.find_by_email(depositor(gf)) # TODO: create user ahead of time???
+        user = User.find_by_email(depositor) # TODO: create user ahead of time???
         relation = "original_file"
         CurationConcerns::VersioningService.create(fs.send(relation.to_sym), user)
       end
+    end
+  end
+
+  class ImportGenericWork
+    def initialize(settings)
+      @settings = settings
+    end
+
+    def from_gf(gf, depositor)
+      gw = GenericWork.new
+      gw.id = gf.id if @settings.preserve_ids
+      gw.apply_depositor_metadata(depositor)
+      gw.label                  = gf.label
+      gw.arkivo_checksum        = gf.arkivo_checksum
+      gw.relative_path          = gf.relative_path
+      gw.import_url             = gf.import_url
+      gw.part_of                = gf.part_of
+      gw.resource_type          = gf.resource_type
+      gw.title                  = gf.title
+      gw.creator                = gf.creator
+      gw.contributor            = gf.contributor
+      gw.description            = gf.description
+      gw.tag                    = gf.tag
+      gw.rights                 = gf.rights
+      gw.publisher              = gf.publisher
+      gw.date_created           = gf.date_created
+      gw.subject                = gf.subject
+      gw.language               = gf.language
+      gw.identifier             = gf.identifier
+      gw.based_near             = gf.based_near
+      gw.related_url            = gf.related_url
+      gw.bibliographic_citation = gf.bibliographic_citation
+      gw.source                 = gf.source
+      gw.save! unless @settings.preserve_ids
+      gw.permissions = ImportPermission.from_gf(gw.id, gf.permissions)
+      gw.save!
+      gw
+    end
+  end
+
+  class ImportGenericFile
+    attr_reader :settings
+
+    def initialize(settings)
+      @settings = settings
+    end
+
+    def import(gf)
+      # This is needed because Sufia uses the full e-mail address (xyz@psu.edu) but ScholarSphere
+      # uses only the login name (xyz). Here we make sure we match the Sufia convention. This
+      # won't be needed when we run the import in ScholarSphere directly since the users we'll be
+      # already in the db with the expected format (xyz@psu.edu)
+      depositor = gf.depositor + "@psu.edu"
+
+      # File Set + File
+      fs = ImportFileSet.new(settings).from_gf(gf, depositor)
+
+      # Generic Work
+      gw = ImportGenericWork.new(settings).from_gf(gf, depositor)
+      gw.ordered_members << fs
+      gw.save!
+      Rails.logger.debug "[IMPORT] Created generic work #{gw.id}"
+
+      # TODO: set generic work thumbnail (shouldn't this happen automatically in create derivatives)
+      gw
     end
   end
 
