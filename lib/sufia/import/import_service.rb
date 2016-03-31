@@ -17,6 +17,14 @@ module Importer
       @settings = settings
     end
 
+    def depositor(gf)
+      # This is needed because Sufia uses the full e-mail address (xyz@psu.edu) but ScholarSphere
+      # uses only the login name (xyz). Here we make sure we match the Sufia convention. This
+      # won't be needed when we run the import in ScholarSphere directly since the users we'll be
+      # already in the db with the expected format (xyz@psu.edu)
+      gf.depositor + "@psu.edu"
+    end
+
     def import(gf)
       # File Set
       fs = FileSet.new
@@ -25,7 +33,7 @@ module Importer
       fs.label = gf.label
       fs.date_uploaded = gf.date_uploaded
       fs.date_modified = gf.date_modified
-      fs.apply_depositor_metadata(gf.depositor)
+      fs.apply_depositor_metadata(depositor(gf))
       fs.save!
 
       fs.permissions = permissions_from_gf(fs.id, gf.permissions)
@@ -49,7 +57,7 @@ module Importer
     def generic_work_from_generic_file(gf)
       GenericWork.new.tap do |gw|
         gw.id = gf.id if @settings.preserve_ids
-        gw.apply_depositor_metadata(gf.depositor)
+        gw.apply_depositor_metadata(depositor(gf))
         gw.label                  = gf.label
         gw.arkivo_checksum        = gf.arkivo_checksum
         gw.relative_path          = gf.relative_path
@@ -85,7 +93,8 @@ module Importer
     def permission(gw_id, gf_perm)
       agent = gf_perm.agent.split("/").last           # e.g. "http://projecthydra.org/ns/auth/person#hjc14"
       type = agent.split("#").first                   # e.g. person or group
-      name = agent.split("#").last
+      name = agent.split("#").last                    # e.g. hjc14 or public
+      name += "@psu.edu" if type == "person"
       access = gf_perm.mode.split("#").last.downcase  # e.g. "http://www.w3.org/ns/auth/acl#Write"
       access = "edit" if access == "write"
       Hydra::AccessControls::Permission.new(id: gw_id, name: name, type: type, access: access)
@@ -132,7 +141,7 @@ module Importer
       gf.versions.sort_by(&:created).pop.each do |version|
         source_uri = sufia6_version_open_uri(gf.id, version.label)
         Hydra::Works::UploadFileToFileSet.call(fs, source_uri)
-        user = User.find_by_email("#{gf.depositor}@psu.edu") # TODO: create user ahead of time???
+        user = User.find_by_email(depositor(gf)) # TODO: create user ahead of time???
         relation = "original_file"
         CurationConcerns::VersioningService.create(fs.send(relation.to_sym), user)
       end
