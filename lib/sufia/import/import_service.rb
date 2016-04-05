@@ -167,26 +167,75 @@ module Importer
     end
   end
 
+  class ImportCollection
+    def initialize(settings)
+      @settings = settings
+    end
+
+    def import(source)
+      # This is needed because Sufia uses the full e-mail address (xyz@psu.edu) but ScholarSphere
+      # uses only the login name (xyz). Here we make sure we match the Sufia convention. This
+      # won't be needed when we run the import in ScholarSphere directly since the users we'll be
+      # already in the db with the expected format (xyz@psu.edu)
+
+      # TODO: include depositor in export
+      depositor = "hjc14" + "@psu.edu"
+
+      collection = Collection.new()
+      collection.id = source.id if @settings.preserve_ids
+      collection.title << source.title
+      collection.apply_depositor_metadata(depositor)
+      source.creator.each do |c|
+        collection.creator << c
+      end
+      source.members.each do |gf_id|
+        # Members of Sufia 6 collections were GenericFiles. For the ScholarSphere
+        # import we are going to assume that the GenericFile that was part of the
+        # original Sufia 6 Collection has been imported into Sufia 7 as a
+        # *GenericWork* with the same ID as the original GenericFile.
+        gw = GenericWork.find(gf_id)
+        collection.members << gw
+      end
+      collection.save
+      Rails.logger.debug "[IMPORT] Created collection #{collection.id}"
+      collection
+    end
+  end
+
   class ImportService
     attr_reader :settings
     def initialize(sufia6_user, sufia6_password, sufia6_root_uri, preserve_ids)
       @settings = ImportSettings.new(sufia6_user, sufia6_password, sufia6_root_uri, preserve_ids)
     end
 
-    def import_files(files_pattern)
+    def import(files_pattern)
       files = Dir.glob(files_pattern)
       Rails.logger.debug "[IMPORT] Processing #{files.count} files from #{files_pattern}..."
       files.each do |file_name|
-        import_file(file_name)
+        basename = File.basename(file_name)
+        case
+        when basename.start_with?("gf_")
+          Rails.logger.debug "[IMPORT] Importing generic file: #{basename}"
+          import_generic_file(file_name)
+        when basename.start_with?("coll_")
+          Rails.logger.debug "[IMPORT] Importing collection: #{basename}"
+          import_collection(file_name)
+        else
+          Rails.logger.debug "[IMPORT] File #{basename} was ignored"
+        end
       end
-      # GenericWork.reindex_everything
     end
 
-    def import_file(file_name)
+    def import_generic_file(file_name)
       json = File.read(file_name)
       generic_file = JSON.parse(json, object_class: OpenStruct)
-      generic_work = ImportGenericFile.new(@settings).import(generic_file)
-      Rails.logger.debug "[IMPORT] File #{File.basename(file_name)} imported as work #{generic_work.id}"
+      ImportGenericFile.new(@settings).import(generic_file)
+    end
+
+    def import_collection(file_name)
+      json = File.read(file_name)
+      collection = JSON.parse(json, object_class: OpenStruct)
+      ImportCollection.new(@settings).import(collection)
     end
   end
 end
