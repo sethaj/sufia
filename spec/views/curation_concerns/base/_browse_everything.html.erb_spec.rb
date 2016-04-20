@@ -13,4 +13,10 @@ describe 'curation_concerns/base/_browse_everything.html.erb', type: :view do
     page = Capybara::Node::Simple.new(rendered)
     expect(page).to have_selector('div.alert-success', text: /Please note that if you upload a large number of files/i, count: 1)
   end
+  it 'collapses BE section when not configured' do
+    expect(Sufia.config).to receive(:browse_everything).and_return(nil)
+    render 'curation_concerns/base/browse_everything', f: f
+    page = Capybara::Node::Simple.new(rendered)
+    expect(page).not_to have_selector('div.alert-success', text: /Please note that if you upload a large number of files/i, count: 1)
+  end
 end
