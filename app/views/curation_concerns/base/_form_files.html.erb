@@ -10,6 +10,14 @@
                     <span>Add files...</span>
                     <input type="file" name="files[]" multiple>
                 </span>
+                <% if !!(request.env['HTTP_USER_AGENT'] =~ /Chrome/) %>
+                <!-- The fileinput-button span is used to style the file input field as button -->
+                <span class="btn btn-success fileinput-button">
+                    <i class="glyphicon glyphicon-plus"></i>
+                    <span>Add folder...</span>
+                    <input type="file" name="files[]" multiple directory webkitdirectory>
+                </span>
+                <% end %>
                 <button type="reset" class="btn btn-warning cancel hidden">
                     <i class="glyphicon glyphicon-ban-circle"></i>
                     <span>Cancel upload</span>
