@@ -79,11 +79,11 @@ module Sufia
       safe_join(values.map { |item| link_to_facet(item, facet_field) }, separator)
     end
 
-    def link_to_field(fieldname, fieldvalue, displayvalue = nil)
-      p = { search_field: 'advanced', fieldname => '"' + fieldvalue + '"' }
-      link_url = main_app.search_catalog_path(p)
-      display = displayvalue.blank? ? fieldvalue : displayvalue
-      link_to(display, link_url)
+    def link_to_field(name, value, label = nil, **options)
+      label ||= value
+      query_args = { search_field: 'advanced',
+                     name => '"' + value + '"' }.merge(options)
+      link_to(label, main_app.search_catalog_path(query_args))
     end
 
     # @param [String,Hash] text either the string to escape or a hash containing the
